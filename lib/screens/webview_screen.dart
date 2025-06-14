@@ -1,137 +1,17 @@
-import 'splash_screen.dart';
-import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
-import 'privacy_policy_screen.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'models/wishlist_item.dart';
-import 'services/wishlist_service.dart';
-import 'screens/wishlist_page.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
-import 'dart:io';
+import "dart:convert";
+import "package:flutter/foundation.dart";
+import "package:flutter/gestures.dart";
+import "package:flutter/material.dart";
+import "package:url_launcher/url_launcher.dart";
+import "package:webview_flutter/webview_flutter.dart";
+import "dart:async";
+import "package:connectivity_plus/connectivity_plus.dart";
 
-const String kPrivacyUrl = 'https://dlaroslin.pl/cms/130/polityka-prywatnosci';
-
-void main() async {
-  if (kDebugMode) debugPrint('Android NDK Version: 27 (zgodność)');
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  if (Platform.isAndroid) {
-    if (Platform.isAndroid) {
-    AndroidWebViewController.enableDebugging(kDebugMode);
-    // WebView.platform = AndroidWebView();
-    }
-  }
-
-  await Hive.initFlutter();
-  Hive.registerAdapter(WishlistItemAdapter());
-  await Hive.openBox<WishlistItem>('wishlist');
-
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: const SplashScreen(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
-
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _animationController;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-
-    _animationController.forward();
-
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const WebViewScreen()),
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
-      body: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset('assets/images/logo.png', height: 120),
-                const SizedBox(height: 24),
-                const Text(
-                  'dlaroslin.pl',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF215A93),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: 220,
-                  child: const LinearProgressIndicator(
-                    minHeight: 10,
-                    backgroundColor: Color(0xFFE0E0E0),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Positioned(
-            bottom: 24,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                'dlaroslin.pl',
-                style: TextStyle(
-                  color: Color(0xFF215A93),
-                  fontSize: 16,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+import "../models/wishlist_item.dart";
+import "../services/wishlist_service.dart";
+import "../privacy_policy_screen.dart";
+import "wishlist_page.dart";
+import "../constants.dart";
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -141,6 +21,7 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
+  late StreamSubscription<ConnectivityResult> _connectivitySubscription;
   late final WebViewController _controller;
   var _loadingProgress = 0;
   var _isLoading = true;
@@ -151,11 +32,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void initState() {
+// Connectivity detection
+Connectivity().checkConnectivity().then((result) {
+  setState(() {
+    _isOffline = result == ConnectivityResult.none;
+  });
+});
+_connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+  setState(() {
+    _isOffline = result == ConnectivityResult.none;
+    // If we were previously in error due to being offline and now online, reload the page
+    if (!_isOffline && _hasError) {
+      _reload();
+    }
+  });
+});
+
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(
-          'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36')
+      ..setUserAgent('Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36')
       ..setBackgroundColor(const Color(0x00000000))
       ..addJavaScriptChannel(
         'WishlistChannel',
@@ -201,8 +97,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         },
       ))
       ..loadRequest(Uri.parse('https://dlaroslin.pl'))
-      ..setUserAgent(
-          'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36');
+      ..setUserAgent('Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36');
   }
 
   void _reload() {
@@ -232,10 +127,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _toggleMenu() async {
+    // Spróbuj najpierw zamknąć overlay (jeżeli otwarte)
     await _controller.runJavaScript(
       "document.querySelector('.mmenu__backdrop, .menu-backdrop, .mmenu-overlay')?.click();"
     );
     await Future.delayed(const Duration(milliseconds: 600));
+    // Kliknij przycisk hamburgera
     await _controller.runJavaScript(
       "document.getElementById('hamburger')?.click();"
     );
@@ -243,6 +140,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   void _toggleWebMenu() {
     _controller.runJavaScript(r"""
+      // Próba znalezienia przycisku menu
       const menuButton = document.querySelector('.hamburger, .menu-toggle, #menu-toggle, .navbar-toggler, [aria-label="Menu"], button[data-toggle="collapse"]');
       if (menuButton) {
         menuButton.click();
@@ -281,6 +179,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void dispose() {
+    _connectivitySubscription.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -298,18 +197,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
         child: Stack(
           children: [
             if (!_hasError)
-              SizedBox.expand(
-                child: WebViewWidget(
-                  controller: _controller,
-                  gestureRecognizers: {
-                    Factory<VerticalDragGestureRecognizer>(
-                      () => VerticalDragGestureRecognizer(),
-                    ),
-                    Factory<OneSequenceGestureRecognizer>(
-                      () => EagerGestureRecognizer(),
-                    ),
-                  },
-                ),
+              WebViewWidget(
+                controller: _controller,
+                gestureRecognizers: {
+                  Factory<VerticalDragGestureRecognizer>(
+                        () => VerticalDragGestureRecognizer(),
+                  ),
+                  Factory<OneSequenceGestureRecognizer>(
+                        () => EagerGestureRecognizer(),
+                  ),
+                },
               ),
             if (_hasError)
               Center(
@@ -323,7 +220,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _isOffline
+                      _isOffline 
                           ? 'Brak połączenia internetowego'
                           : 'Nie można załadować strony',
                       style: const TextStyle(fontSize: 18),

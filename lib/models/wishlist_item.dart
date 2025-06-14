@@ -1,22 +1,28 @@
 import 'package:hive/hive.dart';
 
-
 @HiveType(typeId: 0)
-class WishlistItem {
+class WishlistItem extends HiveObject {
   @HiveField(0)
-  String id;
+  final String id;
 
   @HiveField(1)
-  String title;
+  final String title;
 
   @HiveField(2)
-  String image;
+  final String image;
 
   WishlistItem({
     required this.id,
     required this.title,
     required this.image,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is WishlistItem && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class WishlistItemAdapter extends TypeAdapter<WishlistItem> {
@@ -26,9 +32,10 @@ class WishlistItemAdapter extends TypeAdapter<WishlistItem> {
   @override
   WishlistItem read(BinaryReader reader) {
     final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
+    final fields = <int, dynamic>{};
+    for (var i = 0; i < numOfFields; i++) {
+      fields[reader.readByte()] = reader.read();
+    }
     return WishlistItem(
       id: fields[0] as String,
       title: fields[1] as String,

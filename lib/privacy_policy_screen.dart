@@ -26,7 +26,11 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Polityka prywatności')),
-      body: SafeArea(child: WebViewWidget(controller: _controller)),
+      body: SafeArea(
+        child: SizedBox.expand(
+          child: WebViewWidget(controller: _controller),
+        ),
+      ),
     );
   }
 }
