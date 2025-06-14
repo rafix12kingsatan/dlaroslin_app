@@ -12,6 +12,7 @@ import "../services/wishlist_service.dart";
 import "../privacy_policy_screen.dart";
 import "wishlist_page.dart";
 import "../constants.dart";
+import "../widgets/progress_bar.dart";
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -21,9 +22,9 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late StreamSubscription<ConnectivityResult> _connectivitySubscription;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   late final WebViewController _controller;
-  var _loadingProgress = 0;
+  late final ValueNotifier<int> _progressNotifier;
   var _isLoading = true;
   var _hasError = false;
   var _isOffline = false;
@@ -32,15 +33,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void initState() {
+    _progressNotifier = ValueNotifier<int>(0);
 // Connectivity detection
 Connectivity().checkConnectivity().then((result) {
   setState(() {
-    _isOffline = result == ConnectivityResult.none;
+    _isOffline = result.contains(ConnectivityResult.none);
   });
 });
 _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
   setState(() {
-    _isOffline = result == ConnectivityResult.none;
+    _isOffline = result.contains(ConnectivityResult.none);
     // If we were previously in error due to being offline and now online, reload the page
     if (!_isOffline && _hasError) {
       _reload();
@@ -80,12 +82,15 @@ _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result)
           launchUrl(uri, mode: LaunchMode.externalApplication);
           return NavigationDecision.prevent;
         },
-        onProgress: (progress) => setState(() => _loadingProgress = progress),
-        onPageStarted: (url) => setState(() {
+        onProgress: (progress) => _progressNotifier.value = progress,
+        onPageStarted: (url) {
+        _progressNotifier.value = 0;
+        setState(() {
           _isLoading = true;
           _hasError = false;
           _isOffline = false;
-        }),
+        });
+      },
         onPageFinished: (url) => setState(() => _isLoading = false),
         onWebResourceError: (error) {
           setState(() {
@@ -179,6 +184,7 @@ _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result)
 
   @override
   void dispose() {
+    _progressNotifier.dispose();
     _connectivitySubscription.cancel();
     _searchController.dispose();
     super.dispose();
@@ -247,10 +253,7 @@ _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result)
                 ),
               ),
             if (_isLoading)
-              const LinearProgressIndicator(
-                backgroundColor: Color(0xFFE0E0E0),
-                color: Color(0xFF379A43),
-              ),
+              ProgressBar(progress: _progressNotifier),
           ],
         ),
       ),
